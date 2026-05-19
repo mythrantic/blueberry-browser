@@ -11,6 +11,7 @@ interface Message {
 interface ChatContextType {
     messages: Message[]
     isLoading: boolean
+    isAuthenticated: boolean
 
     // Chat actions
     sendMessage: (content: string) => Promise<void>
@@ -35,6 +36,27 @@ export const useChat = () => {
 export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [messages, setMessages] = useState<Message[]>([])
     const [isLoading, setIsLoading] = useState(false)
+    const [isAuthenticated, setIsAuthenticated] = useState(false)
+
+    // Check auth status on mount
+    useEffect(() => {
+        const checkAuth = async () => {
+            try {
+                const status = await window.sidebarAPI.getCopilotAuthStatus()
+                setIsAuthenticated(status.isAuthenticated)
+            } catch {
+                setIsAuthenticated(false)
+            }
+        }
+        checkAuth()
+
+        window.sidebarAPI.onAuthRequired(() => setIsAuthenticated(false))
+        window.sidebarAPI.onAuthComplete(() => setIsAuthenticated(true))
+
+        return () => {
+            window.sidebarAPI.removeAuthListeners()
+        }
+    }, [])
 
     // Load initial messages from main process
     useEffect(() => {
@@ -153,6 +175,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const value: ChatContextType = {
         messages,
         isLoading,
+        isAuthenticated,
         sendMessage,
         clearChat,
         getPageContent,

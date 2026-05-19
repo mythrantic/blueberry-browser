@@ -6,6 +6,7 @@ import { ArrowUp, Square, Sparkles, Plus } from 'lucide-react'
 import { useChat } from '../contexts/ChatContext'
 import { cn } from '@common/lib/utils'
 import { Button } from '@common/components/Button'
+import { AuthPrompt } from './AuthPrompt'
 
 interface Message {
     id: string
@@ -263,7 +264,7 @@ const ConversationTurnComponent: React.FC<{
 
 // Main Chat Component
 export const Chat: React.FC = () => {
-    const { messages, isLoading, sendMessage, clearChat } = useChat()
+    const { messages, isLoading, sendMessage, clearChat, isAuthenticated } = useChat()
     const scrollRef = useAutoScroll(messages)
 
     // Group messages into conversation turns
@@ -307,7 +308,9 @@ export const Chat: React.FC = () => {
 
                 <div className="pb-4 relative max-w-3xl mx-auto px-4">
 
-                    {messages.length === 0 ? (
+                    {!isAuthenticated ? (
+                        <AuthPrompt />
+                    ) : messages.length === 0 ? (
                         // Empty State
                         <div className="flex items-center justify-center h-full min-h-[400px]">
                             <div className="text-center animate-fade-in max-w-md mx-auto gap-2 flex flex-col">
@@ -340,9 +343,11 @@ export const Chat: React.FC = () => {
             </div>
 
             {/* Input Area */}
-            <div className="p-4">
-                <ChatInput onSend={sendMessage} disabled={isLoading} />
-            </div>
+            {isAuthenticated && (
+                <div className="p-4">
+                    <ChatInput onSend={sendMessage} disabled={isLoading} />
+                </div>
+            )}
         </div>
     )
 }
