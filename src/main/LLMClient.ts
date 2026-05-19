@@ -66,7 +66,7 @@ export class LLMClient {
   private getModelName(): string {
     if (process.env.LLM_MODEL) return process.env.LLM_MODEL;
     switch (this.provider) {
-      case "copilot": return "gpt-4o";
+      case "copilot": return "claude-3.5-haiku";
       case "openai": return "gpt-4o-mini";
       case "anthropic": return "claude-3-5-sonnet-20241022";
     }

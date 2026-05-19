@@ -15,6 +15,7 @@ export function createCopilotModel(
   const provider = createOpenAI({
     baseURL: COPILOT_CHAT_BASE_URL,
     apiKey: "copilot-no-key-needed",
+    compatibility: "compatible", // Force /chat/completions instead of /responses
     fetch: async (url, options) => {
       const sessionToken = await auth.ensureCopilotToken();
 
