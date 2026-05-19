@@ -36,6 +36,23 @@ interface SidebarAPI {
 
   // Tab information
   getActiveTabInfo: () => Promise<TabInfo | null>;
+
+  // Auth
+  startCopilotLogin: () => Promise<{
+    success: boolean;
+    userCode?: string;
+    verificationUri?: string;
+    deviceCode?: string;
+    interval?: number;
+    expiresIn?: number;
+    error?: string;
+  }>;
+  pollCopilotToken: (deviceCode: string, interval: number, expiresIn: number) => Promise<{ success: boolean; error?: string }>;
+  getCopilotAuthStatus: () => Promise<{ isAuthenticated: boolean }>;
+  copilotLogout: () => Promise<{ success: boolean }>;
+  onAuthRequired: (callback: () => void) => void;
+  onAuthComplete: (callback: () => void) => void;
+  removeAuthListeners: () => void;
 }
 
 declare global {

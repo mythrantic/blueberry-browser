@@ -52,6 +52,32 @@ const sidebarAPI = {
 
   // Tab information
   getActiveTabInfo: () => electronAPI.ipcRenderer.invoke("get-active-tab-info"),
+
+  // Auth functionality
+  startCopilotLogin: () =>
+    electronAPI.ipcRenderer.invoke("copilot-start-login"),
+
+  pollCopilotToken: (deviceCode: string, interval: number, expiresIn: number) =>
+    electronAPI.ipcRenderer.invoke("copilot-poll-token", deviceCode, interval, expiresIn),
+
+  getCopilotAuthStatus: () =>
+    electronAPI.ipcRenderer.invoke("copilot-auth-status"),
+
+  copilotLogout: () =>
+    electronAPI.ipcRenderer.invoke("copilot-logout"),
+
+  onAuthRequired: (callback: () => void) => {
+    electronAPI.ipcRenderer.on("auth-required", () => callback());
+  },
+
+  onAuthComplete: (callback: () => void) => {
+    electronAPI.ipcRenderer.on("auth-complete", () => callback());
+  },
+
+  removeAuthListeners: () => {
+    electronAPI.ipcRenderer.removeAllListeners("auth-required");
+    electronAPI.ipcRenderer.removeAllListeners("auth-complete");
+  },
 };
 
 // Use `contextBridge` APIs to expose Electron APIs to
