@@ -1,6 +1,8 @@
 // src/main/copilot/auth.ts
 
-import Store from "electron-store";
+import { app } from "electron";
+import { join } from "path";
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from "fs";
 import {
   GITHUB_CLIENT_ID,
   GITHUB_SCOPES,
@@ -23,10 +25,24 @@ interface CopilotTokenResponse {
   expires_at: number;
 }
 
-const store = new Store<{ githubAccessToken: string }>({
-  name: "blueberry-auth",
-  encryptionKey: "blueberry-browser-v1",
-});
+// Simple JSON file store for token persistence
+function getStorePath(): string {
+  const dir = join(app.getPath("userData"), "auth");
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  return join(dir, "copilot.json");
+}
+
+function readStore(): Record<string, any> {
+  try {
+    return JSON.parse(readFileSync(getStorePath(), "utf-8"));
+  } catch {
+    return {};
+  }
+}
+
+function writeStore(data: Record<string, any>): void {
+  writeFileSync(getStorePath(), JSON.stringify(data), "utf-8");
+}
 
 export class CopilotAuth {
   private accessToken: string | null = null;
@@ -34,7 +50,8 @@ export class CopilotAuth {
   private copilotTokenExpiresAt: number = 0;
 
   constructor() {
-    this.accessToken = store.get("githubAccessToken", null) as string | null;
+    const store = readStore();
+    this.accessToken = store.githubAccessToken || null;
   }
 
   get isAuthenticated(): boolean {
@@ -93,7 +110,7 @@ export class CopilotAuth {
 
       if (data.access_token) {
         this.accessToken = data.access_token;
-        store.set("githubAccessToken", data.access_token);
+        writeStore({ githubAccessToken: data.access_token });
         return data.access_token;
       }
 
@@ -155,6 +172,6 @@ export class CopilotAuth {
     this.accessToken = null;
     this.copilotToken = null;
     this.copilotTokenExpiresAt = 0;
-    store.delete("githubAccessToken");
+    writeStore({});
   }
 }
