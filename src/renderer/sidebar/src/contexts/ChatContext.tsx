@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react'
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react'
 
 interface Message {
     id: string
@@ -35,7 +35,9 @@ export const useChat = () => {
 
 export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [messages, setMessages] = useState<Message[]>([])
-    const [isLoading, setIsLoading] = useState(false)
+    const [isLoading, setIsLoadingState] = useState(false)
+    const isLoadingRef = useRef(false)
+    const setIsLoading = (v: boolean) => { isLoadingRef.current = v; setIsLoadingState(v) }
     const [isAuthenticated, setIsAuthenticated] = useState(false)
 
     // Check auth status on mount
@@ -150,15 +152,15 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         // Listen for message updates from main process
         const handleMessagesUpdated = (updatedMessages: any[]) => {
-            // Convert CoreMessage format to our frontend Message format
+            const lastIndex = updatedMessages.length - 1
             const convertedMessages = updatedMessages.map((msg: any, index: number) => ({
                 id: `msg-${index}`,
                 role: msg.role,
                 content: typeof msg.content === 'string' 
                     ? msg.content 
-                    : msg.content.find((p: any) => p.type === 'text')?.text || '',
+                    : msg.content?.find?.((p: any) => p.type === 'text')?.text || '',
                 timestamp: Date.now(),
-                isStreaming: false
+                isStreaming: index === lastIndex && msg.role === 'assistant' && isLoadingRef.current
             }))
             setMessages(convertedMessages)
         }

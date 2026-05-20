@@ -94,7 +94,7 @@ export class Tab {
   }
 
   async getTabText(): Promise<string> {
-    return await this.runJs("return document.documentElement.innerText");
+    return await this.runJs("document.body?.innerText || ''");
   }
 
   loadURL(url: string): Promise<void> {
