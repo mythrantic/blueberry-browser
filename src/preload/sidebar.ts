@@ -78,6 +78,15 @@ const sidebarAPI = {
     electronAPI.ipcRenderer.removeAllListeners("auth-required");
     electronAPI.ipcRenderer.removeAllListeners("auth-complete");
   },
+
+  // Agent step events (real-time tool activity)
+  onAgentStep: (callback: (step: any) => void) => {
+    electronAPI.ipcRenderer.on("agent-step", (_, step) => callback(step));
+  },
+
+  removeAgentListeners: () => {
+    electronAPI.ipcRenderer.removeAllListeners("agent-step");
+  },
 };
 
 // Use `contextBridge` APIs to expose Electron APIs to

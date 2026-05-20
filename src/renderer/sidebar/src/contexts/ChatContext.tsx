@@ -88,19 +88,24 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const sendMessage = useCallback(async (content: string) => {
         setIsLoading(true)
 
+        // Add user message immediately
+        setMessages(prev => [...prev, {
+            id: `user-${Date.now()}`,
+            role: 'user',
+            content,
+            timestamp: Date.now(),
+            isStreaming: false
+        }])
+
         try {
             const messageId = Date.now().toString()
-
-            // Send message to main process (which will handle context)
             await window.sidebarAPI.sendChatMessage({
                 message: content,
                 messageId: messageId
             })
-
-            // Messages will be updated via the chat-messages-updated event
+            // isLoading will be set to false when chat-response with isComplete arrives
         } catch (error) {
             console.error('Failed to send message:', error)
-        } finally {
             setIsLoading(false)
         }
     }, [])
@@ -143,14 +148,41 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Set up message listeners
     useEffect(() => {
-        // Listen for streaming response updates
+        // Listen for streaming response updates - accumulate text in real-time
         const handleChatResponse = (data: { messageId: string; content: string; isComplete: boolean }) => {
+            if (data.content) {
+                // Update or create streaming assistant message
+                setMessages(prev => {
+                    const lastMsg = prev[prev.length - 1]
+                    if (lastMsg && lastMsg.role === 'assistant' && lastMsg.isStreaming) {
+                        // Append to existing streaming message
+                        return prev.map((msg, i) =>
+                            i === prev.length - 1
+                                ? { ...msg, content: msg.content + data.content }
+                                : msg
+                        )
+                    } else {
+                        // Create new streaming message
+                        return [...prev, {
+                            id: `stream-${data.messageId}`,
+                            role: 'assistant' as const,
+                            content: data.content,
+                            timestamp: Date.now(),
+                            isStreaming: true
+                        }]
+                    }
+                })
+            }
             if (data.isComplete) {
+                // Mark streaming as done
+                setMessages(prev => prev.map(msg =>
+                    msg.isStreaming ? { ...msg, isStreaming: false } : msg
+                ))
                 setIsLoading(false)
             }
         }
 
-        // Listen for message updates from main process
+        // Listen for message updates from main process (final state)
         const handleMessagesUpdated = (updatedMessages: any[]) => {
             const lastIndex = updatedMessages.length - 1
             const convertedMessages = updatedMessages.map((msg: any, index: number) => ({

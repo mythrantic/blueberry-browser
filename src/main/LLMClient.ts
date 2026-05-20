@@ -187,6 +187,8 @@ export class LLMClient {
 
       // Execute tools and add results
       for (const tc of response.tool_calls) {
+        // Notify frontend about tool execution
+        this.webContents.send("agent-step", { type: "act", description: tc.function.name, detail: tc.function.arguments });
         const result = await this.executeTool(tc.function.name, tc.function.arguments);
         console.log(`  🔧 ${tc.function.name} → ${result.substring(0, 80)}`);
         this.messages.push({ role: "tool", content: result, tool_call_id: tc.id });
