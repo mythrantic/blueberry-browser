@@ -2,10 +2,11 @@ import React, { useState, useRef, useEffect, useLayoutEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkBreaks from 'remark-breaks'
-import { ArrowUp, Square, Sparkles, Plus } from 'lucide-react'
+import { ArrowUp, Plus, Zap } from 'lucide-react'
 import { useChat } from '../contexts/ChatContext'
 import { cn } from '@common/lib/utils'
 import { Button } from '@common/components/Button'
+import { AuthPrompt } from './AuthPrompt'
 
 interface Message {
     id: string
@@ -18,24 +19,18 @@ interface Message {
 // Auto-scroll hook
 const useAutoScroll = (messages: Message[]) => {
     const scrollRef = useRef<HTMLDivElement>(null)
-    const prevCount = useRef(0)
 
     useLayoutEffect(() => {
-        if (messages.length > prevCount.current) {
-            setTimeout(() => {
-                scrollRef.current?.scrollIntoView({
-                    behavior: 'smooth',
-                    block: 'end'
-                })
-            }, 100)
-        }
-        prevCount.current = messages.length
-    }, [messages.length])
+        scrollRef.current?.scrollIntoView({
+            behavior: 'smooth',
+            block: 'end'
+        })
+    }, [messages.length, messages[messages.length - 1]?.content])
 
     return scrollRef
 }
 
-// User Message Component - appears on the right
+// User Message Component
 const UserMessage: React.FC<{ content: string }> = ({ content }) => (
     <div className="relative max-w-[85%] ml-auto animate-fade-in">
         <div className="bg-muted dark:bg-muted/50 rounded-3xl px-6 py-4">
@@ -47,31 +42,14 @@ const UserMessage: React.FC<{ content: string }> = ({ content }) => (
 )
 
 // Streaming Text Component
-const StreamingText: React.FC<{ content: string }> = ({ content }) => {
-    const [displayedContent, setDisplayedContent] = useState('')
-    const [currentIndex, setCurrentIndex] = useState(0)
+const StreamingText: React.FC<{ content: string }> = ({ content }) => (
+    <div className="text-foreground">
+        <Markdown content={content} />
+        <span className="inline-block w-2 h-5 bg-primary/60 dark:bg-primary/40 ml-0.5 animate-pulse" />
+    </div>
+)
 
-    useEffect(() => {
-        if (currentIndex < content.length) {
-            const timer = setTimeout(() => {
-                setDisplayedContent(content.slice(0, currentIndex + 1))
-                setCurrentIndex(currentIndex + 1)
-            }, 10)
-            return () => clearTimeout(timer)
-        }
-    }, [content, currentIndex])
-
-    return (
-        <div className="whitespace-pre-wrap text-foreground">
-            {displayedContent}
-            {currentIndex < content.length && (
-                <span className="inline-block w-2 h-5 bg-primary/60 dark:bg-primary/40 ml-0.5 animate-pulse" />
-            )}
-        </div>
-    )
-}
-
-// Markdown Renderer Component
+// Markdown Renderer
 const Markdown: React.FC<{ content: string }> = ({ content }) => (
     <div className="prose prose-sm dark:prose-invert max-w-none 
                     prose-headings:text-foreground prose-p:text-foreground 
@@ -85,7 +63,6 @@ const Markdown: React.FC<{ content: string }> = ({ content }) => (
         <ReactMarkdown
             remarkPlugins={[remarkGfm, remarkBreaks]}
             components={{
-                // Custom code block styling
                 code: ({ node, className, children, ...props }) => {
                     const inline = !className
                     return inline ? (
@@ -98,14 +75,8 @@ const Markdown: React.FC<{ content: string }> = ({ content }) => (
                         </code>
                     )
                 },
-                // Custom link styling
                 a: ({ children, href }) => (
-                    <a
-                        href={href}
-                        className="text-primary hover:underline"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                    >
+                    <a href={href} className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">
                         {children}
                     </a>
                 ),
@@ -116,56 +87,90 @@ const Markdown: React.FC<{ content: string }> = ({ content }) => (
     </div>
 )
 
-// Assistant Message Component - appears on the left
-const AssistantMessage: React.FC<{ content: string; isStreaming?: boolean }> = ({
-    content,
-    isStreaming
-}) => (
-    <div className="relative w-full animate-fade-in">
-        <div className="py-1">
-            {isStreaming ? (
-                <StreamingText content={content} />
-            ) : (
-                <Markdown content={content} />
-            )}
-        </div>
-    </div>
-)
-
-// Loading Indicator with spinning star
-const LoadingIndicator: React.FC = () => {
-    const [isVisible, setIsVisible] = useState(false)
-
-    useEffect(() => {
-        setIsVisible(true)
-    }, [])
+// Agent Steps Component - shows real-time tool activity
+const AgentSteps: React.FC<{ steps: { name: string; args: string }[]; isActive: boolean }> = ({ steps, isActive }) => {
+    if (steps.length === 0 && !isActive) return null
 
     return (
-        <div className={cn(
-            "transition-transform duration-300 ease-in-out",
-            isVisible ? "scale-100" : "scale-0"
-        )}>
-            ...
+        <div className="mb-3 rounded-xl border border-border/50 bg-muted/30 dark:bg-muted/10 overflow-hidden">
+            <div className="px-3 py-2 border-b border-border/30 flex items-center gap-2">
+                {isActive && <span className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse" />}
+                <span className="text-xs font-medium text-muted-foreground">
+                    {isActive ? 'Working...' : `Completed ${steps.length} action${steps.length > 1 ? 's' : ''}`}
+                </span>
+            </div>
+            <div className="divide-y divide-border/20">
+                {steps.map((step, i) => (
+                    <div key={i} className="px-3 py-1.5 flex items-center gap-2 text-xs">
+                        <Zap className="w-3 h-3 text-yellow-500 shrink-0" />
+                        <span className="font-medium text-foreground">{step.name}</span>
+                        {step.args && step.args !== '{}' && (
+                            <span className="text-muted-foreground truncate max-w-[200px]">
+                                {(() => {
+                                    try {
+                                        const parsed = JSON.parse(step.args)
+                                        const val = parsed.url || parsed.code?.substring(0, 40) || ''
+                                        return val ? `→ ${val}` : ''
+                                    } catch { return '' }
+                                })()}
+                            </span>
+                        )}
+                    </div>
+                ))}
+                {isActive && (
+                    <div className="px-3 py-1.5 flex items-center gap-2 text-xs text-muted-foreground">
+                        <span className="w-3 h-3 flex items-center justify-center">
+                            <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 animate-pulse" />
+                        </span>
+                        <span>Thinking...</span>
+                    </div>
+                )}
+            </div>
         </div>
     )
 }
 
-// Chat Input Component with pill design
+// Assistant Message Component
+const AssistantMessage: React.FC<{ content: string; isStreaming?: boolean; toolCalls?: { name: string; args: string }[]; isTooling?: boolean }> = ({
+    content,
+    isStreaming,
+    toolCalls,
+    isTooling
+}) => (
+    <div className="relative w-full animate-fade-in">
+        <AgentSteps steps={toolCalls || []} isActive={isTooling || false} />
+        <div className="py-1">
+            {isStreaming ? (
+                <StreamingText content={content} />
+            ) : content ? (
+                <Markdown content={content} />
+            ) : null}
+        </div>
+    </div>
+)
+
+// Loading Indicator
+const LoadingIndicator: React.FC = () => (
+    <div className="flex items-center gap-2 text-muted-foreground text-sm">
+        <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+        <span>Thinking...</span>
+    </div>
+)
+
+// Chat Input Component
 const ChatInput: React.FC<{
     onSend: (message: string) => void
     disabled: boolean
 }> = ({ onSend, disabled }) => {
     const [value, setValue] = useState('')
-    const [isFocused, setIsFocused] = useState(false)
     const textareaRef = useRef<HTMLTextAreaElement>(null)
+    const [isFocused, setIsFocused] = useState(false)
 
-    // Auto-resize textarea
     useEffect(() => {
         if (textareaRef.current) {
             textareaRef.current.style.height = 'auto'
             const scrollHeight = textareaRef.current.scrollHeight
-            const newHeight = Math.min(scrollHeight, 200) // Max 200px
-            textareaRef.current.style.height = `${newHeight}px`
+            textareaRef.current.style.height = `${Math.min(scrollHeight, 200)}px`
         }
     }, [value])
 
@@ -173,10 +178,7 @@ const ChatInput: React.FC<{
         if (value.trim() && !disabled) {
             onSend(value.trim())
             setValue('')
-            // Reset textarea height
-            if (textareaRef.current) {
-                textareaRef.current.style.height = '24px'
-            }
+            if (textareaRef.current) textareaRef.current.style.height = '24px'
         }
     }
 
@@ -193,29 +195,20 @@ const ChatInput: React.FC<{
             "shadow-chat animate-spring-scale outline-none transition-all duration-200",
             isFocused ? "border-primary/20 dark:border-primary/30" : "border-border"
         )}>
-            {/* Input Area */}
             <div className="w-full px-3 py-2">
-                <div className="w-full flex items-start gap-3">
-                    <div className="relative flex-1 overflow-hidden">
-                        <textarea
-                            ref={textareaRef}
-                            value={value}
-                            onChange={(e) => setValue(e.target.value)}
-                            onFocus={() => setIsFocused(true)}
-                            onBlur={() => setIsFocused(false)}
-                            onKeyDown={handleKeyDown}
-                            placeholder="Send a message..."
-                            className="w-full resize-none outline-none bg-transparent 
-                                     text-foreground placeholder:text-muted-foreground
-                                     min-h-[24px] max-h-[200px]"
-                            rows={1}
-                            style={{ lineHeight: '24px' }}
-                        />
-                    </div>
-                </div>
+                <textarea
+                    ref={textareaRef}
+                    value={value}
+                    onChange={(e) => setValue(e.target.value)}
+                    onFocus={() => setIsFocused(true)}
+                    onBlur={() => setIsFocused(false)}
+                    onKeyDown={handleKeyDown}
+                    placeholder="Send a message..."
+                    className="w-full resize-none outline-none bg-transparent text-foreground placeholder:text-muted-foreground min-h-[24px] max-h-[200px]"
+                    rows={1}
+                    style={{ lineHeight: '24px' }}
+                />
             </div>
-
-            {/* Send Button */}
             <div className="w-full flex items-center gap-1.5 px-1 mt-2 mb-1">
                 <div className="flex-1" />
                 <button
@@ -244,16 +237,20 @@ interface ConversationTurn {
 const ConversationTurnComponent: React.FC<{
     turn: ConversationTurn
     isLoading?: boolean
-}> = ({ turn, isLoading }) => (
+    toolCalls?: { name: string; args: string }[]
+    isTooling?: boolean
+}> = ({ turn, isLoading, toolCalls, isTooling }) => (
     <div className="pt-12 flex flex-col gap-8">
         {turn.user && <UserMessage content={turn.user.content} />}
-        {turn.assistant && (
+        {(turn.assistant || isTooling || (toolCalls && toolCalls.length > 0)) && (
             <AssistantMessage
-                content={turn.assistant.content}
-                isStreaming={turn.assistant.isStreaming}
+                content={turn.assistant?.content || ''}
+                isStreaming={turn.assistant?.isStreaming}
+                toolCalls={toolCalls}
+                isTooling={isTooling}
             />
         )}
-        {isLoading && (
+        {isLoading && !isTooling && !(toolCalls && toolCalls.length > 0) && (
             <div className="flex justify-start">
                 <LoadingIndicator />
             </div>
@@ -263,8 +260,35 @@ const ConversationTurnComponent: React.FC<{
 
 // Main Chat Component
 export const Chat: React.FC = () => {
-    const { messages, isLoading, sendMessage, clearChat } = useChat()
+    const { messages, isLoading, sendMessage, clearChat, isAuthenticated } = useChat()
     const scrollRef = useAutoScroll(messages)
+    const [toolCalls, setToolCalls] = useState<{ name: string; args: string }[]>([])
+    const [completedToolCalls, setCompletedToolCalls] = useState<{ name: string; args: string }[]>([])
+
+    // Listen for agent step events (real-time tool activity)
+    useEffect(() => {
+        const api = window.sidebarAPI
+        api.onAgentStep?.((step: any) => {
+            if (step.type === 'act') {
+                setToolCalls(prev => [...prev, { name: step.description, args: step.detail || '' }])
+            }
+        })
+        return () => {
+            api.removeAgentListeners?.()
+        }
+    }, [])
+
+    // When loading finishes, move tool calls to completed state
+    useEffect(() => {
+        if (!isLoading && toolCalls.length > 0) {
+            setCompletedToolCalls(toolCalls)
+            setToolCalls([])
+        }
+        if (isLoading) {
+            setCompletedToolCalls([])
+            setToolCalls([])
+        }
+    }, [isLoading])
 
     // Group messages into conversation turns
     const conversationTurns: ConversationTurn[] = []
@@ -273,32 +297,24 @@ export const Chat: React.FC = () => {
             const turn: ConversationTurn = { user: messages[i] }
             if (messages[i + 1]?.role === 'assistant') {
                 turn.assistant = messages[i + 1]
-                i++ // Skip next message since we've paired it
+                i++
             }
             conversationTurns.push(turn)
         } else if (messages[i].role === 'assistant' &&
             (i === 0 || messages[i - 1]?.role !== 'user')) {
-            // Handle standalone assistant messages
             conversationTurns.push({ assistant: messages[i] })
         }
     }
 
-    // Check if we need to show loading after the last turn
     const showLoadingAfterLastTurn = isLoading &&
         messages[messages.length - 1]?.role === 'user'
 
     return (
         <div className="flex flex-col h-full bg-background">
-            {/* Messages Area */}
             <div className="flex-1 overflow-y-auto">
                 <div className="h-8 max-w-3xl mx-auto px-4">
-                    {/* New Chat Button - Floating */}
                     {messages.length > 0 && (
-                        <Button
-                            onClick={clearChat}
-                            title="Start new chat"
-                            variant="ghost"
-                        >
+                        <Button onClick={clearChat} title="Start new chat" variant="ghost">
                             <Plus className="size-4" />
                             New Chat
                         </Button>
@@ -306,9 +322,9 @@ export const Chat: React.FC = () => {
                 </div>
 
                 <div className="pb-4 relative max-w-3xl mx-auto px-4">
-
-                    {messages.length === 0 ? (
-                        // Empty State
+                    {!isAuthenticated ? (
+                        <AuthPrompt />
+                    ) : messages.length === 0 ? (
                         <div className="flex items-center justify-center h-full min-h-[400px]">
                             <div className="text-center animate-fade-in max-w-md mx-auto gap-2 flex flex-col">
                                 <h3 className="text-2xl font-bold">🫐</h3>
@@ -319,8 +335,6 @@ export const Chat: React.FC = () => {
                         </div>
                     ) : (
                         <>
-
-                            {/* Render conversation turns */}
                             {conversationTurns.map((turn, index) => (
                                 <ConversationTurnComponent
                                     key={`turn-${index}`}
@@ -329,20 +343,30 @@ export const Chat: React.FC = () => {
                                         showLoadingAfterLastTurn &&
                                         index === conversationTurns.length - 1
                                     }
+                                    toolCalls={
+                                        index === conversationTurns.length - 1
+                                            ? (toolCalls.length > 0 ? toolCalls : completedToolCalls)
+                                            : undefined
+                                    }
+                                    isTooling={
+                                        isLoading &&
+                                        index === conversationTurns.length - 1 &&
+                                        toolCalls.length > 0
+                                    }
                                 />
                             ))}
                         </>
                     )}
 
-                    {/* Scroll anchor */}
                     <div ref={scrollRef} />
                 </div>
             </div>
 
-            {/* Input Area */}
-            <div className="p-4">
-                <ChatInput onSend={sendMessage} disabled={isLoading} />
-            </div>
+            {isAuthenticated && (
+                <div className="p-4">
+                    <ChatInput onSend={sendMessage} disabled={isLoading} />
+                </div>
+            )}
         </div>
     )
 }

@@ -24,6 +24,9 @@ export class EventManager {
 
     // Debug events
     this.handleDebugEvents();
+
+    // Auth events
+    this.handleAuthEvents();
   }
 
   private handleTabEvents(): void {
@@ -221,6 +224,53 @@ export class EventManager {
   private handleDebugEvents(): void {
     // Ping test
     ipcMain.on("ping", () => console.log("pong"));
+  }
+
+  private handleAuthEvents(): void {
+    // Start device flow login
+    ipcMain.handle("copilot-start-login", async () => {
+      try {
+        const auth = this.mainWindow.sidebar.client.auth;
+        const deviceCode = await auth.requestDeviceCode();
+        return {
+          success: true,
+          userCode: deviceCode.user_code,
+          verificationUri: deviceCode.verification_uri,
+          deviceCode: deviceCode.device_code,
+          interval: deviceCode.interval,
+          expiresIn: deviceCode.expires_in,
+        };
+      } catch (error) {
+        console.error("Device flow start failed:", error);
+        return { success: false, error: String(error) };
+      }
+    });
+
+    // Poll for access token
+    ipcMain.handle("copilot-poll-token", async (_, deviceCode: string, interval: number, expiresIn: number) => {
+      try {
+        const auth = this.mainWindow.sidebar.client.auth;
+        await auth.pollForAccessToken(deviceCode, interval, expiresIn);
+        this.mainWindow.sidebar.client.onAuthComplete();
+        return { success: true };
+      } catch (error) {
+        console.error("Device flow poll failed:", error);
+        return { success: false, error: String(error) };
+      }
+    });
+
+    // Check auth status
+    ipcMain.handle("copilot-auth-status", () => {
+      const auth = this.mainWindow.sidebar.client.auth;
+      return { isAuthenticated: auth.isAuthenticated };
+    });
+
+    // Logout
+    ipcMain.handle("copilot-logout", () => {
+      const auth = this.mainWindow.sidebar.client.auth;
+      auth.logout();
+      return { success: true };
+    });
   }
 
   private broadcastDarkMode(sender: WebContents, isDarkMode: boolean): void {

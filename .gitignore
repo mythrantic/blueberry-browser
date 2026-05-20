@@ -133,4 +133,5 @@ logs/
 # Misc
 *.pem
 *.key
-*.cert
+*.certSPEC.md
+docs/plans/
